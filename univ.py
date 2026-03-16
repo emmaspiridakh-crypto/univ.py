@@ -486,7 +486,7 @@ async def ticketpanel(ctx):
             "📎 Το Support είναι εδώ για να βοηθήσει.\n"
         
         ),
-        color=discord.Color.()
+        color=discord.Color.blue()
     )
 
     embed.set_image(url="https://i.imgur.com/GP0vv0W.jpeg")
