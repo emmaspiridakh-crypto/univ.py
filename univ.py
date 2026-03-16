@@ -180,7 +180,7 @@ class TicketDropdown(discord.ui.View):
         embed.add_field(name="📂 Category", value=category, inline=False)
         embed.add_field(
             name="📌 Info",
-            value="Εδώ θα βάλεις το δικό σου κείμενο για τα tickets.",
+            value="Περίμενε λίγο και θα έρθουμε να σε εξυπηρετήσουμε σύντομα!",
             inline=False
         )
         embed.timestamp = discord.utils.utcnow()
@@ -479,14 +479,14 @@ async def ticketpanel(ctx):
         return await ctx.send("❌ Δεν έχεις άδεια να χρησιμοποιήσεις αυτή την εντολή.")
 
     embed = discord.Embed(
-        title="🎟️ Most Wanted® Tickets",
+        title="🎟️ Universe Roleplay Roblox Tickets",
         description=(
             "💠 Για άμεση επικοινωνία με το κατάλληλο άτομο,\n"
             "διάλεξε σωστά την κατηγορία του ticket.\n\n"
             "📎 Το Support είναι εδώ για να βοηθήσει.\n"
-            "❗ Μπορείς να έχεις μόνο ένα ticket ενεργό."
+        
         ),
-        color=discord.Color.blue()
+        color=discord.Color.()
     )
 
     embed.set_image(url="https://i.imgur.com/GP0vv0W.jpeg")
