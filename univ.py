@@ -696,7 +696,7 @@ async def timeout(ctx, member: discord.Member, minutes: int, *, reason="No reaso
 
 @bot.command()
 async def panel(ctx): 
-if not is_owner(ctx.author):
+if not is_staff(ctx.author):
         return await ctx.send("❌ Δεν έχεις άδεια.")
     
     embed = discord.Embed(
