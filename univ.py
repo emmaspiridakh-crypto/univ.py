@@ -4,10 +4,12 @@ import threading
 from flask import Flask
 import discord
 from discord.ext import commands
+import discord
+from discord.ext import tasks
 
-# ============================
-# CONFIG — ΒΑΖΕΙΣ ΕΣΥ ΤΑ IDs
-# ============================
+# ========
+# CONFIG 
+# ========
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -23,7 +25,7 @@ TICKET_LOG_CHANNEL_ID = 1456762636376215608
 
 AUTOROLE_ID = 1456762635075846425 
 
-# Server logs (6 channels όπως ζήτησες)
+# Server logs 
 MEMBER_JOIN_LOG = 1456762636040540183
 MEMBER_LEAVE_LOG = 1456762636040540184
 ROLE_LOG = 1456762636040540185
@@ -31,6 +33,18 @@ MESSAGE_LOG = 1456762636040540188
 VOICE_LOG = 1456762636376215609
 CHANNEL_LOG = 1456762636376215605
 
+STATUS_CHANNEL_ID = 1483500984989913169  # ΒΑΛΕ ΤΟ VOICE CHANNEL ID
+GUILD_ID = 1456762635075846420  # ΒΑΛΕ ΤΟ SERVER ID
+
+# ============================================================
+# LOG CHANNEL IDS (ΒΑΛΕ ΤΑ ΔΙΚΑ ΣΟΥ)
+# ============================================================
+ALLOWED_ROLES = [OWNER_ID, CO_OWNER_ID, FOUNDER_ID, STAFF_ID]
+
+BAN_LOG = 1456762636040540187
+UNBAN_LOG = 1456762636040540187
+KICK_LOG = 1483494737439621261
+TIMEOUT_LOG = 1456762636040540186
 
 # ============================
 # FLASK KEEP-ALIVE (Render uptime)
@@ -73,6 +87,15 @@ def is_panel_allowed(member: discord.Member) -> bool:
 
 def get_ticket_log_channel(guild: discord.Guild):
     return guild.get_channel(TICKET_LOG_CHANNEL_ID)
+
+def is_staff():
+    async def predicate(ctx):
+        user_roles = [role.id for role in ctx.author.roles]
+        if any(r in user_roles for r in ALLOWED_ROLES):
+            return True
+        await ctx.send("❌ Δεν έχεις άδεια να χρησιμοποιήσεις αυτό το command.")
+        return False
+    return commands.check(predicate)
 
 # ============================
 # CLOSE BUTTON
@@ -206,11 +229,118 @@ class TicketDropdown(discord.ui.View):
             ephemeral=True
         )
 
+# ============================================================
+# SECTION — JOB PANEL & TICKET SYSTEM
+# ============================================================
+
+import discord
+from discord.ext import commands
+from discord.ui import View, Select, Button
+
+# === PLACEHOLDERS (ΒΑΛΕ ΤΑ ΔΙΚΑ ΣΟΥ) ===
+TICKET_CATEGORY_ID = 1456762638691467287  # Category όπου θα ανοίγουν τα tickets
+JOB_MANAGER_ROLE = 1456762635256332289     # Job Manager role
+
+ALLOWED_TICKET_ROLES = [JOB_MANAGER_ROLE, OWNER_ROLE, FOUNDER_ROLE]
+
+
+# ============================================================
+# DROPDOWN MENU
+# ============================================================
+
+class JobDropdown(Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Criminal Job", description="Άνοιγμα ticket για Criminal Job", emoji="🔫"),
+            discord.SelectOption(label="Civilian Job", description="Άνοιγμα ticket για Civilian Job", emoji="👔"),
+        ]
+
+        super().__init__(
+            placeholder="Επίλεξε κατηγορία job...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        job_type = self.values[0]
+
+        guild = interaction.guild
+        category = guild.get_channel(TICKET_CATEGORY_ID)
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+        }
+
+        # Roles που βλέπουν όλα τα tickets
+        for role_id in ALLOWED_TICKET_ROLES:
+            role = guild.get_role(role_id)
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+
+        # Δημιουργία ticket channel
+        channel = await guild.create_text_channel(
+            name=f"{job_type.lower().replace(' ', '-')}-{interaction.user.name}",
+            category=category,
+            overwrites=overwrites
+        )
+
+        # Embed μέσα στο ticket
+        embed = discord.Embed(
+            title=f"🎫 Ticket Created — {job_type}",
+            description=(
+                f"👤 **User:** {interaction.user.mention}\n"
+                f"📌 **Category:** {job_type}\n\n"
+                "Παρακαλώ περιμένετε να σας εξυπηρετήσει το προσωπικό."
+            ),
+            color=discord.Color.blue()
+        )
+
+        # Close button
+        view = CloseTicketView()
+
+        await channel.send(embed=embed, view=view)
+        await interaction.response.send_message(f"Το ticket σου δημιουργήθηκε: {channel.mention}", ephemeral=True)
+
+
+# ============================================================
+# CLOSE BUTTON
+# ============================================================
+
+class CloseTicketView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Close Ticket", style=discord.ButtonStyle.red, emoji="🔒")
+    async def close_ticket(self, interaction: discord.Interaction, button: Button):
+        await interaction.channel.delete()
+
+
+# ============================================================
+# JOB PANEL COMMAND
+# ============================================================
+
+@bot.command()
+async def jobpanel(ctx):
+    embed = discord.Embed(
+        title="💼 Job Panel",
+        description="Επίλεξε κατηγορία job από το dropdown menu.",
+        color=discord.Color.gold()
+    )
+    embed.set_image(url="https://i.imgur.com/yourimage.png")  # ΒΑΛΕ ΤΗ ΔΙΚΗ ΣΟΥ ΕΙΚΟΝΑ
+
+    view = View()
+    view.add_item(JobDropdown())
+
+    await ctx.send(embed=embed, view=view)
+
 # ============================
 # TEMP VOICE CHANNEL SYSTEM
 # ============================
 
 SUPPORT_VOICE_ID = 1456762640226451585  # ΒΑΛΕ ΤΟ ID ΤΟΥ SUPPORT VOICE LOBBY
+STAFF_ID = 1456762635205873676  # ΒΑΛΕ ΤΟ STAFF ROLE ID
 
 temp_voice_channels = {}  # user_id : channel_id
 
@@ -232,7 +362,7 @@ async def on_voice_state_update(member, before, after):
             member: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
         }
 
-        # Προσθήκη STAFF
+        # Προσθήκη STAFF (να βλέπει όλα τα temp channels)
         staff_role = guild.get_role(STAFF_ID)
         if staff_role:
             overwrites[staff_role] = discord.PermissionOverwrite(
@@ -247,7 +377,10 @@ async def on_voice_state_update(member, before, after):
         )
 
         # Μεταφορά χρήστη στο νέο κανάλι
-        await member.move_to(temp_channel)
+        try:
+            await member.move_to(temp_channel)
+        except:
+            pass
 
         # Αποθήκευση
         temp_voice_channels[member.id] = temp_channel.id
@@ -265,34 +398,6 @@ async def on_voice_state_update(member, before, after):
             for user_id, chan_id in list(temp_voice_channels.items()):
                 if chan_id == channel.id:
                     del temp_voice_channels[user_id]
-@bot.event
-async def on_member_join(member):
-    channel = member.guild.get_channel(MEMBER_JOIN_LOG)
-    if channel:
-        embed = discord.Embed(
-            title="📥 **Member Joined**",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="👤 User", value=f"{member.mention} (`{member.id}`)", inline=False)
-        embed.add_field(name="📅 Account Created", value=str(member.created_at)[:19], inline=False)
-        embed.timestamp = discord.utils.utcnow()
-        embed.set_thumbnail(url=member.avatar)
-        await channel.send(embed=embed)
-
-@bot.event
-async def on_member_remove(member):
-    channel = member.guild.get_channel(MEMBER_LEAVE_LOG)
-    if channel:
-        embed = discord.Embed(
-            title="📤 **Member Left**",
-            color=discord.Color.red()
-        )
-        embed.add_field(name="👤 User", value=f"{member.mention} (`{member.id}`)", inline=False)
-        embed.add_field(name="📅 Joined Server", value=str(member.joined_at)[:19], inline=False)
-        embed.timestamp = discord.utils.utcnow()
-        embed.set_thumbnail(url=member.avatar)
-        await channel.send(embed=embed)
-
 # ============================
 # AUTOROLE SYSTEM
 # ============================
@@ -519,6 +624,121 @@ async def dmall(ctx, *, message):
 
     await ctx.send(f"📨 DM στάλθηκαν σε {sent} μέλη.")
 
+# ============================================================
+# STAFF COMMANDS
+# ============================================================
+
+@bot.command()
+@is_staff()
+async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
+    await member.ban(reason=reason)
+
+    log = bot.get_channel(BAN_LOG)
+    if log:
+        embed = discord.Embed(
+            title="🔨 Member Banned",
+            description=f"**User:** {member}\n**By:** {ctx.author}\n**Reason:** {reason}",
+            color=discord.Color.red()
+        )
+        await log.send(embed=embed)
+
+    await ctx.send(f"🔨 {member} banned.")
+
+@bot.command()
+@is_staff()
+async def unban(ctx, user_id: int):
+    user = await bot.fetch_user(user_id)
+    await ctx.guild.unban(user)
+
+    log = bot.get_channel(UNBAN_LOG)
+    if log:
+        embed = discord.Embed(
+            title="🔄 Member Unbanned",
+            description=f"**User:** {user}\n**By:** {ctx.author}",
+            color=discord.Color.green()
+        )
+        await log.send(embed=embed)
+
+    await ctx.send(f"🔄 {user} unbanned.")
+
+@bot.command()
+@is_staff()
+async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
+    await member.kick(reason=reason)
+
+    log = bot.get_channel(KICK_LOG)
+    if log:
+        embed = discord.Embed(
+            title="🦶 Member Kicked",
+            description=f"**User:** {member}\n**By:** {ctx.author}\n**Reason:** {reason}",
+            color=discord.Color.orange()
+        )
+        await log.send(embed=embed)
+
+    await ctx.send(f"🦶 {member} kicked.")
+
+@bot.command()
+@is_staff()
+async def timeout(ctx, member: discord.Member, minutes: int, *, reason="No reason provided"):
+    duration = timedelta(minutes=minutes)
+    await member.timeout(duration, reason=reason)
+
+    log = bot.get_channel(TIMEOUT_LOG)
+    if log:
+        embed = discord.Embed(
+            title="⏳ Member Timed Out",
+            description=f"**User:** {member}\n**By:** {ctx.author}\n**Duration:** {minutes} minutes\n**Reason:** {reason}",
+            color=discord.Color.blue()
+        )
+        await log.send(embed=embed)
+
+    await ctx.send(f"⏳ {member} timed out for {minutes} minutes.")
+
+@bot.command()
+async def panel(ctx): 
+if not is_owner(ctx.author):
+        return await ctx.send("❌ Δεν έχεις άδεια.")
+    
+    embed = discord.Embed(
+        title="🛠️ Staff Commands Panel",
+        description=(
+            "**🔨 !ban <member> <reason>**\n"
+            "**🔄 !unban <user_id>**\n"
+            "**🦶 !kick <member> <reason>**\n"
+            "**⏳ !timeout <member> <minutes> <reason>**\n"
+        ),
+        color=discord.Color.green()
+    )
+    embed.set_footer(text="Μόνο staff μπορούν να τα χρησιμοποιήσουν.")
+    await ctx.send(embed=embed)
+# ================================================
+# SECTION — SERVER STATUS VOICE CHANNEL
+# ================================================
+@tasks.loop(seconds=30)
+async def update_server_status():
+    guild = bot.get_guild(GUILD_ID)
+    if guild is None:
+        return
+
+    # Μετρήσεις
+    total_members = len([m for m in guild.members if not m.bot])
+    total_bots = len([m for m in guild.members if m.bot])
+    online_members = len([m for m in guild.members if m.status != discord.Status.offline and not m.bot])
+
+    # Voice channel
+    channel = guild.get_channel(STATUS_CHANNEL_ID)
+    if channel:
+        try:
+            await channel.edit(
+                name=f"👥 Members: {total_members} | 🤖 Bots: {total_bots} | 🟢 Online: {online_members}"
+            )
+        except:
+            pass
+
+async def start_status_task():
+    await bot.wait_until_ready()
+    update_server_status.start()
+
 # ============================
 # BOT READY EVENT
 # ============================
@@ -527,6 +747,7 @@ async def dmall(ctx, *, message):
 async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})")
     print("Bot is fully online and operational.")
+    await start_status_task()
 
 
 # ============================
@@ -534,5 +755,5 @@ async def on_ready():
 # ============================
 
 if __name__ == "__main__":
-    keep_alive()  # Flask uptime
+    keep_alive()  
     bot.run(TOKEN)
