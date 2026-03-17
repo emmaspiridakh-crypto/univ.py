@@ -695,16 +695,16 @@ async def timeout(ctx, member: discord.Member, minutes: int, *, reason="No reaso
     await ctx.send(f"⏳ {member} timed out for {minutes} minutes.")
 
 @bot.command()
-async def panel(ctx): 
-if not is_staff(ctx.author):
+async def panel(ctx):
+    if not is_staff(ctx.author):
         return await ctx.send("❌ Δεν έχεις άδεια.")
-    
+
     embed = discord.Embed(
-        title="🛠️ Staff Commands Panel",
+        title="⚙️ Staff Commands Panel",
         description=(
             "**🔨 !ban <member> <reason>**\n"
-            "**🔄 !unban <user_id>**\n"
-            "**🦶 !kick <member> <reason>**\n"
+            "**🆙 !unban <user_id>**\n"
+            "**✏️ !kick <member> <reason>**\n"
             "**⏳ !timeout <member> <minutes> <reason>**\n"
         ),
         color=discord.Color.green()
