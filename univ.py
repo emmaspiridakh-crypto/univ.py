@@ -128,6 +128,8 @@ class CloseTicketButton(discord.ui.View):
 # TICKET DROPDOWN
 # ============================
 
+TICKET_CATEGORY_ID = 1456762638691467287
+
 class TicketDropdown(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -189,6 +191,7 @@ class TicketDropdown(discord.ui.View):
                 )
 
         # Create ticket channel
+        category = guild.get_channel(TICKET_CATEGORY_ID)
         channel = await guild.create_text_channel(
             name=f"{category}-{user.name}",
             overwrites=overwrites
