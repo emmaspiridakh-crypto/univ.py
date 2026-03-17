@@ -3,9 +3,7 @@ import threading
 
 from flask import Flask
 import discord
-from discord.ext import commands
-import discord
-from discord.ext import tasks
+from discord.ext import commands, tasks
 
 # ========
 # CONFIG 
@@ -33,19 +31,17 @@ MESSAGE_LOG = 1456762636040540188
 VOICE_LOG = 1456762636376215609
 CHANNEL_LOG = 1456762636376215605
 
-STATUS_CHANNEL_ID = 1483500984989913169  # ΒΑΛΕ ΤΟ VOICE CHANNEL ID
-GUILD_ID = 1456762635075846420  # ΒΑΛΕ ΤΟ SERVER ID
+STATUS_CHANNEL_ID = 1483500984989913169
+GUILD_ID = 1456762635075846420
 
-# ============================================================
-# LOG CHANNEL IDS (ΒΑΛΕ ΤΑ ΔΙΚΑ ΣΟΥ)
-# ============================================================
+# Log channels
 BAN_LOG = 1456762636040540187
 UNBAN_LOG = 1456762636040540187
 KICK_LOG = 1483494737439621261
 TIMEOUT_LOG = 1456762636040540186
 
 # ============================
-# FLASK KEEP-ALIVE (Render uptime)
+# FLASK KEEP-ALIVE
 # ============================
 
 app = Flask(__name__)
@@ -63,7 +59,6 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-
 # ============================
 # BOT SETUP
 # ============================
@@ -71,8 +66,10 @@ def keep_alive():
 intents = discord.Intents.default()
 intents.members = True
 intents.voice_states = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+intents.message_content = True   # ΑΠΑΡΑΙΤΗΤΟ για να δουλεύουν commands
+intents.guilds = True
 
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ============================
 # HELPERS
@@ -87,6 +84,9 @@ def is_panel_allowed(member: discord.Member) -> bool:
 
 def get_ticket_log_channel(guild: discord.Guild):
     return guild.get_channel(TICKET_LOG_CHANNEL_ID)
+
+# FIXED: ALLOWED_ROLES δεν υπήρχε → error
+ALLOWED_ROLES = {FOUNDER_ID, OWNER_ID, CO_OWNER_ID, STAFF_ID}
 
 def is_staff():
     async def predicate(ctx):
@@ -153,7 +153,7 @@ class TicketDropdown(discord.ui.View):
         self.add_item(select)
 
     async def select_callback(self, interaction: discord.Interaction):
-        category = interaction.data["values"][0]
+        selected_category = interaction.data["values"][0]  # FIXED
         guild = interaction.guild
         user = interaction.user
 
@@ -163,25 +163,23 @@ class TicketDropdown(discord.ui.View):
             user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
 
-        if category == "Owner":
+        if selected_category == "Owner":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID]
-        elif category == "Support":
+        elif selected_category == "Support":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID, STAFF_ID]
-        elif category == "Ban Appeal":
+        elif selected_category == "Ban Appeal":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID]
-        elif category == "Bug":
+        elif selected_category == "Bug":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID]
-        elif category == "Clip Permission":
+        elif selected_category == "Clip Permission":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID]
-        elif category == "Staff Report":
+        elif selected_category == "Staff Report":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID]
-        elif category == "Donate":
+        elif selected_category == "Donate":
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID, DONATE_MANAGER_ID]
-        elif category == "Other":
-            roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID, STAFF_ID]
         else:
             roles = [FOUNDER_ID, OWNER_ID, CO_OWNER_ID, STAFF_ID]
-               
+
         for role_id in roles:
             role = guild.get_role(role_id)
             if role:
@@ -190,20 +188,23 @@ class TicketDropdown(discord.ui.View):
                     send_messages=True
                 )
 
-        # Create ticket channel
-        category = guild.get_channel(TICKET_CATEGORY_ID)
+        # FIXED: σωστό category object
+        ticket_category = guild.get_channel(TICKET_CATEGORY_ID)
+
+        # FIXED: σωστό όνομα καναλιού
         channel = await guild.create_text_channel(
-            name=f"{category}-{user.name}",
+            name=f"{selected_category.lower().replace(' ', '-')}-{user.name}",
+            category=ticket_category,
             overwrites=overwrites
         )
 
         # Ticket embed
         embed = discord.Embed(
-            title=f"🎫 {category} Ticket",
+            title=f"🎫 {selected_category} Ticket",
             color=discord.Color.blue()
         )
         embed.add_field(name="👤 User", value=user.mention, inline=False)
-        embed.add_field(name="📂 Category", value=category, inline=False)
+        embed.add_field(name="📂 Category", value=selected_category, inline=False)
         embed.add_field(
             name="📌 Info",
             value="Περίμενε λίγο και θα έρθουμε να σε εξυπηρετήσουμε σύντομα!",
@@ -222,7 +223,7 @@ class TicketDropdown(discord.ui.View):
                 color=discord.Color.green()
             )
             log_embed.add_field(name="👤 User", value=user.mention, inline=False)
-            log_embed.add_field(name="📂 Category", value=category, inline=False)
+            log_embed.add_field(name="📂 Category", value=selected_category, inline=False)
             log_embed.add_field(name="📁 Channel", value=channel.mention, inline=False)
             log_embed.timestamp = discord.utils.utcnow()
             await log_ch.send(embed=log_embed)
@@ -232,24 +233,13 @@ class TicketDropdown(discord.ui.View):
             ephemeral=True
         )
 
+
 # ============================================================
-# SECTION — JOB PANEL & TICKET SYSTEM
+# JOB PANEL & TICKET SYSTEM
 # ============================================================
 
-import discord
-from discord.ext import commands
-from discord.ui import View, Select, Button
-
-# === PLACEHOLDERS (ΒΑΛΕ ΤΑ ΔΙΚΑ ΣΟΥ) ===
-TICKET_CATEGORY_ID = 1456762638691467287  # Category όπου θα ανοίγουν τα tickets
-JOB_MANAGER_ID = 1456762635256332289     # Job Manager role
-
+JOB_MANAGER_ID = 1456762635256332289
 ALLOWED_TICKET_ROLES = [JOB_MANAGER_ID, OWNER_ID, FOUNDER_ID]
-
-
-# ============================================================
-# DROPDOWN MENU
-# ============================================================
 
 class JobDropdown(Select):
     def __init__(self):
@@ -269,27 +259,24 @@ class JobDropdown(Select):
         job_type = self.values[0]
 
         guild = interaction.guild
-        category = guild.get_channel(TICKET_CATEGORY_ID)
+        ticket_category = guild.get_channel(TICKET_CATEGORY_ID)
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
 
-        # Roles που βλέπουν όλα τα tickets
         for role_id in ALLOWED_TICKET_ROLES:
             role = guild.get_role(role_id)
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
-        # Δημιουργία ticket channel
         channel = await guild.create_text_channel(
             name=f"{job_type.lower().replace(' ', '-')}-{interaction.user.name}",
-            category=category,
+            category=ticket_category,
             overwrites=overwrites
         )
 
-        # Embed μέσα στο ticket
         embed = discord.Embed(
             title=f"🎫 Ticket Created — {job_type}",
             description=(
@@ -300,9 +287,7 @@ class JobDropdown(Select):
             color=discord.Color.blue()
         )
 
-        # Close button
-        view = CloseTicketView()
-
+        view = CloseTicketButton()
         await channel.send(embed=embed, view=view)
         await interaction.response.send_message(f"Το ticket σου δημιουργήθηκε: {channel.mention}", ephemeral=True)
 
@@ -331,19 +316,20 @@ async def jobpanel(ctx):
         description="Επίλεξε κατηγορία job από το dropdown menu.",
         color=discord.Color.gold()
     )
-    embed.set_image(url="https://i.imgur.com/ZLyLVjA.jpeg")  # ΒΑΛΕ ΤΗ ΔΙΚΗ ΣΟΥ ΕΙΚΟΝΑ
+    embed.set_image(url="https://i.imgur.com/ZLyLVjA.jpeg")
 
     view = View()
     view.add_item(JobDropdown())
 
     await ctx.send(embed=embed, view=view)
 
+
 # ============================
 # TEMP VOICE CHANNEL SYSTEM
 # ============================
 
-SUPPORT_VOICE_ID = 1456762640226451585  # ΒΑΛΕ ΤΟ ID ΤΟΥ SUPPORT VOICE LOBBY
-STAFF_ID = 1456762635205873676  # ΒΑΛΕ ΤΟ STAFF ROLE ID
+SUPPORT_VOICE_ID = 1456762640226451585
+STAFF_ID = 1456762635205873676
 
 temp_voice_channels = {}  # user_id : channel_id
 
@@ -391,9 +377,14 @@ async def on_voice_state_update(member, before, after):
 
         channel = before.channel
 
+        # Αν το κανάλι άδειασε → delete
         if len(channel.members) == 0:
-            await channel.delete()
+            try:
+                await channel.delete()
+            except:
+                pass
 
+            # Καθαρισμός dictionary
             for user_id, chan_id in list(temp_voice_channels.items()):
                 if chan_id == channel.id:
                     del temp_voice_channels[user_id]
@@ -636,12 +627,16 @@ async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
     if log:
         embed = discord.Embed(
             title="🔨 Member Banned",
-            description=f"**User:** {member}\n**By:** {ctx.author}\n**Reason:** {reason}",
             color=discord.Color.red()
         )
+        embed.add_field(name="👤 User", value=member.mention, inline=False)
+        embed.add_field(name="🛠️ Action By", value=ctx.author.mention, inline=False)
+        embed.add_field(name="📄 Reason", value=reason, inline=False)
+        embed.timestamp = discord.utils.utcnow()
         await log.send(embed=embed)
 
     await ctx.send(f"🔨 {member} banned.")
+
 
 @bot.command()
 @is_staff()
@@ -653,12 +648,15 @@ async def unban(ctx, user_id: int):
     if log:
         embed = discord.Embed(
             title="🔄 Member Unbanned",
-            description=f"**User:** {user}\n**By:** {ctx.author}",
             color=discord.Color.green()
         )
+        embed.add_field(name="👤 User", value=str(user), inline=False)
+        embed.add_field(name="🛠️ Action By", value=ctx.author.mention, inline=False)
+        embed.timestamp = discord.utils.utcnow()
         await log.send(embed=embed)
 
     await ctx.send(f"🔄 {user} unbanned.")
+
 
 @bot.command()
 @is_staff()
@@ -669,12 +667,16 @@ async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
     if log:
         embed = discord.Embed(
             title="🦶 Member Kicked",
-            description=f"**User:** {member}\n**By:** {ctx.author}\n**Reason:** {reason}",
             color=discord.Color.orange()
         )
+        embed.add_field(name="👤 User", value=member.mention, inline=False)
+        embed.add_field(name="🛠️ Action By", value=ctx.author.mention, inline=False)
+        embed.add_field(name="📄 Reason", value=reason, inline=False)
+        embed.timestamp = discord.utils.utcnow()
         await log.send(embed=embed)
 
     await ctx.send(f"🦶 {member} kicked.")
+
 
 @bot.command()
 @is_staff()
@@ -686,12 +688,17 @@ async def timeout(ctx, member: discord.Member, minutes: int, *, reason="No reaso
     if log:
         embed = discord.Embed(
             title="⏳ Member Timed Out",
-            description=f"**User:** {member}\n**By:** {ctx.author}\n**Duration:** {minutes} minutes\n**Reason:** {reason}",
             color=discord.Color.blue()
         )
+        embed.add_field(name="👤 User", value=member.mention, inline=False)
+        embed.add_field(name="🛠️ Action By", value=ctx.author.mention, inline=False)
+        embed.add_field(name="⏱️ Duration", value=f"{minutes} minutes", inline=False)
+        embed.add_field(name="📄 Reason", value=reason, inline=False)
+        embed.timestamp = discord.utils.utcnow()
         await log.send(embed=embed)
 
     await ctx.send(f"⏳ {member} timed out for {minutes} minutes.")
+
 
 @bot.command()
 async def panel(ctx):
@@ -710,34 +717,36 @@ async def panel(ctx):
     )
     embed.set_footer(text="Μόνο staff μπορούν να τα χρησιμοποιήσουν.")
     await ctx.send(embed=embed)
+
+
 # ================================================
 # SECTION — SERVER STATUS VOICE CHANNEL
 # ================================================
+
 @tasks.loop(seconds=30)
 async def update_server_status():
     guild = bot.get_guild(GUILD_ID)
     if guild is None:
         return
 
-    # Μετρήσεις
     total_members = len([m for m in guild.members if not m.bot])
     total_bots = len([m for m in guild.members if m.bot])
     online_members = len([m for m in guild.members if m.status != discord.Status.offline and not m.bot])
 
-    # Voice channel
     channel = guild.get_channel(STATUS_CHANNEL_ID)
     if channel:
         try:
             await channel.edit(
                 name=f"👥{total_members} | 🤖{total_bots} | 🟢{online_members}"
             )
-    
         except:
             pass
+
 
 async def start_status_task():
     await bot.wait_until_ready()
     update_server_status.start()
+
 
 # ============================
 # BOT READY EVENT
@@ -755,5 +764,5 @@ async def on_ready():
 # ============================
 
 if __name__ == "__main__":
-    keep_alive()  
+    keep_alive()
     bot.run(TOKEN)
