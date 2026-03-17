@@ -237,9 +237,9 @@ from discord.ui import View, Select, Button
 
 # === PLACEHOLDERS (ΒΑΛΕ ΤΑ ΔΙΚΑ ΣΟΥ) ===
 TICKET_CATEGORY_ID = 1456762638691467287  # Category όπου θα ανοίγουν τα tickets
-JOB_MANAGER_ROLE = 1456762635256332289     # Job Manager role
+JOB_MANAGER_ID = 1456762635256332289     # Job Manager role
 
-ALLOWED_TICKET_ROLES = [JOB_MANAGER_ROLE, OWNER_ROLE, FOUNDER_ROLE]
+ALLOWED_TICKET_ROLES = [JOB_MANAGER_ID, OWNER_ID, FOUNDER_ID]
 
 
 # ============================================================
@@ -326,7 +326,7 @@ async def jobpanel(ctx):
         description="Επίλεξε κατηγορία job από το dropdown menu.",
         color=discord.Color.gold()
     )
-    embed.set_image(url="https://i.imgur.com/yourimage.png")  # ΒΑΛΕ ΤΗ ΔΙΚΗ ΣΟΥ ΕΙΚΟΝΑ
+    embed.set_image(url="https://i.imgur.com/ZLyLVjA.jpeg")  # ΒΑΛΕ ΤΗ ΔΙΚΗ ΣΟΥ ΕΙΚΟΝΑ
 
     view = View()
     view.add_item(JobDropdown())
