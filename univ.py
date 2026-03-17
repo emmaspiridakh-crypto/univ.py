@@ -68,7 +68,9 @@ def keep_alive():
 # BOT SETUP
 # ============================
 
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.members = True
+intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
@@ -354,13 +356,12 @@ async def on_voice_state_update(member, before, after):
         if member.id in temp_voice_channels:
             return
 
-        # Δημιουργία προσωρινού voice channel
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(view_channel=True, connect=True, speak=True),
         }
 
-        # Προσθήκη STAFF (να βλέπει όλα τα temp channels)
+        # STAFF βλέπει όλα τα temp channels
         staff_role = guild.get_role(STAFF_ID)
         if staff_role:
             overwrites[staff_role] = discord.PermissionOverwrite(
@@ -374,13 +375,12 @@ async def on_voice_state_update(member, before, after):
             category=after.channel.category
         )
 
-        # Μεταφορά χρήστη στο νέο κανάλι
+        # Μεταφορά χρήστη
         try:
             await member.move_to(temp_channel)
         except:
             pass
 
-        # Αποθήκευση
         temp_voice_channels[member.id] = temp_channel.id
 
     # ========== USER LEAVES A TEMP CHANNEL ==========
@@ -388,11 +388,9 @@ async def on_voice_state_update(member, before, after):
 
         channel = before.channel
 
-        # Αν το channel είναι άδειο → διαγραφή
         if len(channel.members) == 0:
             await channel.delete()
 
-            # Αφαίρεση από το dict
             for user_id, chan_id in list(temp_voice_channels.items()):
                 if chan_id == channel.id:
                     del temp_voice_channels[user_id]
@@ -728,8 +726,9 @@ async def update_server_status():
     if channel:
         try:
             await channel.edit(
-                name=f"👥 Members: {total_members} | 🤖 Bots: {total_bots} | 🟢 Online: {online_members}"
+                name=f"👥{total_members} | 🤖{total_bots} | 🟢{online_members}"
             )
+    
         except:
             pass
 
